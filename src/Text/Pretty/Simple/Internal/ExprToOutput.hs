@@ -139,9 +139,9 @@ putSurroundExpr startOutputType endOutputType (CommaSeparated [exprs]) = do
   where
     thisAndNextMulti = (\(a,b) -> (or a, or b)) . unzip . map isMultiLine
 
-    isMultiLine (Brackets commaSeparated) = isMultiLine' commaSeparated
-    isMultiLine (Braces commaSeparated) = isMultiLine' commaSeparated
-    isMultiLine (Parens commaSeparated) = isMultiLine' commaSeparated
+    isMultiLine (Brackets commaSeparated _) = isMultiLine' commaSeparated
+    isMultiLine (Braces commaSeparated _) = isMultiLine' commaSeparated
+    isMultiLine (Parens commaSeparated _) = isMultiLine' commaSeparated
     isMultiLine _ = (False, False)
     
     isMultiLine' (CommaSeparated []) = (False, False)
@@ -215,12 +215,12 @@ addToCurrentLine diff =
   modify (\printState -> printState {currLine = currLine printState + diff})
 
 putExpression :: MonadState PrinterState m => Expr -> m [Output]
-putExpression (Brackets commaSeparated) = 
-  putSurroundExpr OutputOpenBracket OutputCloseBracket commaSeparated
-putExpression (Braces commaSeparated) =
-  putSurroundExpr OutputOpenBrace OutputCloseBrace commaSeparated
-putExpression (Parens commaSeparated) =
-  putSurroundExpr OutputOpenParen OutputCloseParen commaSeparated
+putExpression (Brackets commaSeparated closed) = 
+  putSurroundExpr OutputOpenBracket (if closed then OutputCloseBracket else OutputOther "") commaSeparated
+putExpression (Braces commaSeparated closed) =
+  putSurroundExpr OutputOpenBrace (if closed then OutputCloseBrace else OutputOther "") commaSeparated
+putExpression (Parens commaSeparated closed) =
+  putSurroundExpr OutputOpenParen (if closed then OutputCloseParen else OutputOther "") commaSeparated
 putExpression (StringLit string) = do
   nest <- gets nestLevel
   when (nest < 0) $ addToNestLevel 1
@@ -252,12 +252,12 @@ removeEmptyInnerCommaSeparatedExprList :: [Expr] -> [Expr]
 removeEmptyInnerCommaSeparatedExprList = fmap removeEmptyInnerCommaSeparatedExpr
 
 removeEmptyInnerCommaSeparatedExpr :: Expr -> Expr
-removeEmptyInnerCommaSeparatedExpr (Brackets commaSeparated) =
-  Brackets $ removeEmptyInnerCommaSeparated commaSeparated
-removeEmptyInnerCommaSeparatedExpr (Braces commaSeparated) =
-  Braces $ removeEmptyInnerCommaSeparated commaSeparated
-removeEmptyInnerCommaSeparatedExpr (Parens commaSeparated) =
-  Parens $ removeEmptyInnerCommaSeparated commaSeparated
+removeEmptyInnerCommaSeparatedExpr (Brackets commaSeparated b) =
+  flip Brackets b $ removeEmptyInnerCommaSeparated commaSeparated
+removeEmptyInnerCommaSeparatedExpr (Braces commaSeparated b) =
+  flip Braces b $ removeEmptyInnerCommaSeparated commaSeparated
+removeEmptyInnerCommaSeparatedExpr (Parens commaSeparated b) =
+  flip Parens b $ removeEmptyInnerCommaSeparated commaSeparated
 removeEmptyInnerCommaSeparatedExpr other = other
 
 removeEmptyInnerCommaSeparated :: CommaSeparated [Expr] -> CommaSeparated [Expr]

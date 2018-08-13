@@ -19,51 +19,51 @@ module Text.Pretty.Simple.Internal.ExprParser
   where
 
 import Text.Pretty.Simple.Internal.Expr (CommaSeparated(..), Expr(..))
-import Control.Arrow (first)
+import Control.Arrow (first, (***))
 
 testString1, testString2 :: String
 testString1 = "Just [TextInput {textInputClass = Just (Class {unClass = \"class\"}), textInputId = Just (Id {unId = \"id\"}), textInputName = Just (Name {unName = \"name\"}), textInputValue = Just (Value {unValue = \"value\"}), textInputPlaceholder = Just (Placeholder {unPlaceholder = \"placeholder\"})}, TextInput {textInputClass = Just (Class {unClass = \"class\"}), textInputId = Just (Id {unId = \"id\"}), textInputName = Just (Name {unName = \"name\"}), textInputValue = Just (Value {unValue = \"value\"}), textInputPlaceholder = Just (Placeholder {unPlaceholder = \"placeholder\"})}]"
 testString2 = "some stuff (hello [\"dia\\x40iahello\", why wh, bye] ) (bye)"
 
 expressionParse :: String -> [Expr]
-expressionParse = fst . parseExprs
+expressionParse = fst . parseExprs ""
 
-parseExpr :: String -> (Expr, String)
-parseExpr ('(':rest) = first (Parens . CommaSeparated) $ parseCSep ')' rest
-parseExpr ('[':rest) = first (Brackets . CommaSeparated) $ parseCSep ']' rest
-parseExpr ('{':rest) = first (Braces . CommaSeparated) $ parseCSep '}' rest
-parseExpr ('"':rest) = first StringLit $ parseStringLit rest
-parseExpr other      = first Other $ parseOther other
+parseExpr :: String -> String -> (Expr, String)
+parseExpr _ ('(':rest) = makeBracketed Parens $ parseCSep ')' rest
+parseExpr _ ('[':rest) = makeBracketed Brackets $ parseCSep ']' rest
+parseExpr _ ('{':rest) = makeBracketed Braces $ parseCSep '}' rest
+parseExpr _ ('"':rest) = StringLit *** (drop 1) $ parseStringLit rest
+parseExpr end other    = first Other $ parseOther (end ++ "({[") other
 
-parseExprs :: String -> ([Expr], String)
-parseExprs [] = ([], "")
-parseExprs s@(c:_)
-  | c `elem` (")]}," :: String) = ([], s)
-  | otherwise = let (parsed, rest') = parseExpr s
-                    (toParse, rest) = parseExprs rest'
+makeBracketed :: (CommaSeparated [Expr] -> Bool -> Expr) -> ([[Expr]], String) -> (Expr, String)
+makeBracketed constr res@(_, rest) = ((flip constr) (length rest > 0) . CommaSeparated) *** (drop 1) $ res
+
+parseExprs :: String -> String -> ([Expr], String)
+parseExprs _ [] = ([], "")
+parseExprs end s@(c:_)
+  | c `elem` end = ([], s)
+  | otherwise = let (parsed, rest') = parseExpr end s
+                    (toParse, rest) = parseExprs end rest'
                  in (parsed : toParse, rest)
 
 parseCSep :: Char -> String -> ([[Expr]], String)
 parseCSep _ [] = ([], "")
 parseCSep end s@(c:cs)
-  | c == end = ([], cs)
-  -- Mismatch condition; if the end does not match, there is a mistake
-  -- Perhaps there should be a Missing constructor for Expr
-  | c `elem` (")]}" :: String) = ([], s)
+  | c == end = ([], s)
   | c == ',' = parseCSep end cs
-  | otherwise = let (parsed, rest') = parseExprs s
+  | otherwise = let (parsed, rest') = parseExprs [end,','] s
                     (toParse, rest) = parseCSep end rest'
                  in (parsed : toParse, rest)
 
 parseStringLit :: String -> (String, String)
 parseStringLit [] = ("", "")
-parseStringLit ('"':rest) = ("", rest)
+parseStringLit s@('"':_) = ("", s)
 parseStringLit (c:cs)   = (c:cs', rest)
   where (cs', rest) = parseStringLit cs
 
-parseOther :: String -> (String, String)
-parseOther [] = ("", "")
-parseOther s@(c:cs)
-  | c `elem` ("{[()]}\"," :: String) = ("", s)
-  | otherwise = let (toParse, rest) = parseOther cs
+parseOther :: String -> String -> (String, String)
+parseOther _ [] = ("", "")
+parseOther end s@(c:cs)
+  | c `elem` end = ("", s) --("{[()]}\"," :: String) = ("", s)
+  | otherwise = let (toParse, rest) = parseOther end cs
                  in (c : toParse, rest)

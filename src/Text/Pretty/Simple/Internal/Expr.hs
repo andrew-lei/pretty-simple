@@ -31,10 +31,11 @@ import GHC.Generics (Generic)
 newtype CommaSeparated a = CommaSeparated { unCommaSeparated :: [a] }
   deriving (Data, Eq, Generic, Show, Typeable)
 
+-- Bool determines whether closed or not
 data Expr
-  = Brackets !(CommaSeparated [Expr])
-  | Braces !(CommaSeparated [Expr])
-  | Parens !(CommaSeparated [Expr])
+  = Brackets !(CommaSeparated [Expr]) Bool
+  | Braces !(CommaSeparated [Expr]) Bool
+  | Parens !(CommaSeparated [Expr]) Bool
   | StringLit !String
   | Other !String
   deriving (Data, Eq, Generic, Show, Typeable)
